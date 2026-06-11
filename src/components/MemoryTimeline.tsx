@@ -35,7 +35,11 @@ export const PolaroidImage = ({ imageSrc, alt, className }: { imageSrc: string; 
         setIsLoading(false);
       });
     } else {
-      setSrc(imageSrc);
+      const isAbsoluteOrData = imageSrc.startsWith('http') || imageSrc.startsWith('data:');
+      const finalSrc = isAbsoluteOrData
+        ? imageSrc
+        : `${import.meta.env.BASE_URL}${imageSrc.startsWith('/') ? imageSrc.slice(1) : imageSrc}`;
+      setSrc(finalSrc);
       setIsLoading(false);
     }
   }, [imageSrc]);

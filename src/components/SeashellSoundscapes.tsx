@@ -107,7 +107,7 @@ export default function SeashellSoundscapes() {
         console.warn("Could not retrieve dynamic song metadata:", err);
       });
 
-    fetch('lyrics.lrc')
+    fetch(`${import.meta.env.BASE_URL}lyrics.lrc`)
       .then(res => {
         if (!res.ok) throw new Error("File not found");
         return res.text();
@@ -262,7 +262,7 @@ export default function SeashellSoundscapes() {
         {/* Invisible Audio Element */}
         <audio
           ref={audioRef}
-          src={ACTIVE_TRACK.url}
+          src={ACTIVE_TRACK.url.startsWith('http') ? ACTIVE_TRACK.url : `${import.meta.env.BASE_URL}${ACTIVE_TRACK.url}`}
           preload="auto"
         />
 
