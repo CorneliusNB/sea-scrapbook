@@ -79,6 +79,7 @@ export default function SeashellSoundscapes() {
     title: ACTIVE_TRACK.title,
     artist: ACTIVE_TRACK.artist,
   });
+  const [audioError, setAudioError] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const lyricsContainerRef = useRef<HTMLDivElement | null>(null);
@@ -161,6 +162,23 @@ export default function SeashellSoundscapes() {
       setActiveLyricIndex(-1);
     };
 
+    const onError = () => {
+      console.error("Audio element error:", audio.error);
+      if (audio.error) {
+        let errorMsg = "Unknown audio error";
+        switch (audio.error.code) {
+          case 1: errorMsg = "Playback aborted."; break;
+          case 2: errorMsg = "Network audio download error."; break;
+          case 3: errorMsg = "Audio decoding failed."; break;
+          case 4: errorMsg = "Audio file not found."; break;
+        }
+        if (audio.error.message) {
+          errorMsg += ` (${audio.error.message})`;
+        }
+        setAudioError(errorMsg);
+      }
+    };
+
     // If metadata is already loaded before event listeners bind
     if (audio.readyState >= 1) {
       setDuration(audio.duration || 0);
@@ -170,6 +188,7 @@ export default function SeashellSoundscapes() {
     audio.addEventListener('durationchange', onDurationChange);
     audio.addEventListener('loadedmetadata', onLoadedMetadata);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('error', onError);
 
     // Apply init volume
     audio.volume = volume;
@@ -179,6 +198,7 @@ export default function SeashellSoundscapes() {
       audio.removeEventListener('durationchange', onDurationChange);
       audio.removeEventListener('loadedmetadata', onLoadedMetadata);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('error', onError);
     };
   }, []);
 
@@ -220,10 +240,12 @@ export default function SeashellSoundscapes() {
       audio.pause();
       setIsPlaying(false);
     } else {
+      setAudioError(null);
       audio.play().then(() => {
         setIsPlaying(true);
       }).catch(err => {
         console.warn("Audio play interrupted or blocked by browser:", err);
+        setAudioError("Interrupted/Blocked: click play again.");
       });
     }
   };
@@ -347,6 +369,11 @@ export default function SeashellSoundscapes() {
               <p className="text-[10px] text-sky-300 font-mono tracking-widest uppercase mt-0.5 mb-4">
                 {trackMetadata.artist}
               </p>
+              {audioError && (
+                <div className="text-[10px] text-rose-400 font-mono bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-xl mb-4 max-w-[220px] mx-auto text-center">
+                  {audioError}
+                </div>
+              )}
             </div>
 
             {/* Play/Pause Main Control button */}
