@@ -7,9 +7,9 @@ import { Music, Play, Pause, Volume2, Sparkles, Radio } from 'lucide-react';
 // Only you can change this song by editing this direct file template definition!
 // =========================================================================
 const ACTIVE_TRACK = {
-  title: "Clair de Lune (Moonlight Accord)",
-  artist: "Claude Debussy • Anniversary Symphony",
-  url: "/api/audio",
+  title: "Somethin' Stupid",
+  artist: "Frank Sinatra",
+  url: "song.flac",
   lyrics: [
     { time: 0, text: "🎵 Our Ocean Symphony begins..." },
     { time: 9, text: "⛵ Sailing together into the deep blue..." },
@@ -107,9 +107,9 @@ export default function SeashellSoundscapes() {
         console.warn("Could not retrieve dynamic song metadata:", err);
       });
 
-    fetch('/api/lyrics')
+    fetch('lyrics.lrc')
       .then(res => {
-        if (!res.ok) throw new Error("File not found on backend");
+        if (!res.ok) throw new Error("File not found");
         return res.text();
       })
       .then(text => {
@@ -120,7 +120,7 @@ export default function SeashellSoundscapes() {
         }
       })
       .catch(err => {
-        console.warn("Using embedded Clair de Lune lyrics fallback. To customize, edit lyrics.lrc in the root folder:", err);
+        console.warn("Using embedded lyrics fallback. To customize, edit public/lyrics.lrc:", err);
       });
   }, []);
 
