@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { Heart, Waves, Compass, Sparkles, Anchor, Ship } from 'lucide-react';
+import { Heart, Waves, Compass, Sparkles, Anchor, Ship, Settings, Database, Copy, Check, Info } from 'lucide-react';
 import AnniversaryCounter from './components/AnniversaryCounter';
 import SeashellSoundscapes from './components/SeashellSoundscapes';
 import BottleWishWells from './components/BottleWishWells';
@@ -9,6 +9,18 @@ import CoralOracle from './components/CoralOracle';
 import BackgroundSea from './components/BackgroundSea';
 import { CoupleConfig, MemoryMilestone, LoveLetter } from './types';
 import { oceanAudio } from './utils/audio';
+import {
+  initSupabase,
+  disconnectSupabase,
+  isSupabaseConnected,
+  syncWishes,
+  syncMilestones,
+  pushSingleWish,
+  pushSingleMilestone,
+  deleteSingleWish,
+  deleteSingleMilestone,
+  SUPABASE_SQL_SCHEMA
+} from './utils/supabaseSync';
 
 const DEFAULT_CONFIG: CoupleConfig = {
   partner1: 'Enjie',
@@ -82,51 +94,87 @@ export default function App() {
   const [config, setConfig] = useState<CoupleConfig>(DEFAULT_CONFIG);
   const [memories, setMemories] = useState<MemoryMilestone[]>(DEFAULT_MEMORIES);
   const [letters, setLetters] = useState<LoveLetter[]>(DEFAULT_LETTERS);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isSupabaseActive, setIsSupabaseActive] = useState(isSupabaseConnected());
+  const [syncing, setSyncing] = useState(false);
 
-  // Load from LocalStorage
+  // Load and Sync Data on mount
   useEffect(() => {
-    try {
-      const storedConfig = localStorage.getItem('sea_couple_config');
-      if (storedConfig) {
-        setConfig(JSON.parse(storedConfig));
-      } else {
-        localStorage.setItem('sea_couple_config', JSON.stringify(DEFAULT_CONFIG));
-      }
-
-      const storedMemories = localStorage.getItem('sea_milestones');
-      let parsedMemories: MemoryMilestone[] = [];
-      if (storedMemories) {
-        parsedMemories = JSON.parse(storedMemories);
-      }
-      
-      DEFAULT_MEMORIES.forEach(defMem => {
-        const existingIdx = parsedMemories.findIndex(m => m.id === defMem.id);
-        if (existingIdx === -1) {
-          parsedMemories.push(defMem);
-        } else {
-          parsedMemories[existingIdx].description = defMem.description;
-        }
-      });
-      
-      parsedMemories.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-      localStorage.setItem('sea_milestones', JSON.stringify(parsedMemories));
-      setMemories(parsedMemories);
-
-      const storedLetters = localStorage.getItem('sea_wishes');
-      let parsedLetters: LoveLetter[] = [];
-      if (storedLetters) {
-        parsedLetters = JSON.parse(storedLetters);
-      }
-
-      const hasDefault = parsedLetters.some(l => l.id === 'default-letter-1');
-      if (!hasDefault) {
-        parsedLetters = [DEFAULT_LETTERS[0], ...parsedLetters];
-        localStorage.setItem('sea_wishes', JSON.stringify(parsedLetters));
-      }
-      setLetters(parsedLetters);
-    } catch (e) {
-      console.error('LocalStorage failed to read presets:', e);
+    // 1. Check for Supabase URL query parameters
+    const searchParams = new URLSearchParams(window.location.search);
+    const sUrl = searchParams.get('supabaseUrl');
+    const sKey = searchParams.get('supabaseKey');
+    if (sUrl && sKey) {
+      initSupabase(sUrl, sKey);
+      setIsSupabaseActive(true);
+      // Clean URL parameters from display
+      window.history.replaceState({}, document.title, window.location.pathname);
     }
+
+    const loadAndSync = async () => {
+      let parsedMemories: MemoryMilestone[] = [];
+      let parsedLetters: LoveLetter[] = [];
+
+      try {
+        const storedConfig = localStorage.getItem('sea_couple_config');
+        if (storedConfig) {
+          setConfig(JSON.parse(storedConfig));
+        } else {
+          localStorage.setItem('sea_couple_config', JSON.stringify(DEFAULT_CONFIG));
+        }
+
+        const storedMemories = localStorage.getItem('sea_milestones');
+        if (storedMemories) {
+          parsedMemories = JSON.parse(storedMemories);
+        }
+        
+        DEFAULT_MEMORIES.forEach(defMem => {
+          const existingIdx = parsedMemories.findIndex(m => m.id === defMem.id);
+          if (existingIdx === -1) {
+            parsedMemories.push(defMem);
+          } else {
+            parsedMemories[existingIdx].description = defMem.description;
+          }
+        });
+        
+        parsedMemories.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setMemories(parsedMemories);
+
+        const storedLetters = localStorage.getItem('sea_wishes');
+        if (storedLetters) {
+          parsedLetters = JSON.parse(storedLetters);
+        }
+
+        const hasDefault = parsedLetters.some(l => l.id === 'default-letter-1');
+        if (!hasDefault) {
+          parsedLetters = [DEFAULT_LETTERS[0], ...parsedLetters];
+        }
+        setLetters(parsedLetters);
+      } catch (e) {
+        console.error('LocalStorage failed to read presets:', e);
+      }
+
+      // 2. Perform Supabase Sync in background if active
+      if (isSupabaseConnected()) {
+        setSyncing(true);
+        try {
+          const syncedWishes = await syncWishes(parsedLetters);
+          setLetters(syncedWishes);
+          localStorage.setItem('sea_wishes', JSON.stringify(syncedWishes));
+
+          const syncedMems = await syncMilestones(parsedMemories);
+          syncedMems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          setMemories(syncedMems);
+          localStorage.setItem('sea_milestones', JSON.stringify(syncedMems));
+        } catch (err) {
+          console.error("Auto sync failed:", err);
+        } finally {
+          setSyncing(false);
+        }
+      }
+    };
+
+    loadAndSync();
   }, []);
 
   // Update Config handler
@@ -136,7 +184,7 @@ export default function App() {
   };
 
   // Add Memory handler
-  const handleAddMemory = (newMemory: Omit<MemoryMilestone, 'id'>) => {
+  const handleAddMemory = async (newMemory: Omit<MemoryMilestone, 'id'>) => {
     const freshMemory: MemoryMilestone = {
       ...newMemory,
       id: Math.random().toString(36).substring(2, 9),
@@ -144,17 +192,28 @@ export default function App() {
     const updated = [...memories, freshMemory];
     setMemories(updated);
     localStorage.setItem('sea_milestones', JSON.stringify(updated));
+
+    if (isSupabaseConnected()) {
+      await pushSingleMilestone(freshMemory);
+    }
   };
 
   // Update Memory handler (e.g. to add/change image)
-  const handleUpdateMemory = (id: string, updatedFields: Partial<MemoryMilestone>) => {
+  const handleUpdateMemory = async (id: string, updatedFields: Partial<MemoryMilestone>) => {
     const updated = memories.map(m => m.id === id ? { ...m, ...updatedFields } : m);
     setMemories(updated);
     localStorage.setItem('sea_milestones', JSON.stringify(updated));
+
+    if (isSupabaseConnected()) {
+      const fullMemory = updated.find(m => m.id === id);
+      if (fullMemory) {
+        await pushSingleMilestone(fullMemory);
+      }
+    }
   };
 
   // Delete Memory handler
-  const handleDeleteMemory = (id: string) => {
+  const handleDeleteMemory = async (id: string) => {
     const memoryToDelete = memories.find(m => m.id === id);
     if (memoryToDelete && memoryToDelete.image && memoryToDelete.image.startsWith('image-')) {
       import('./utils/imageDb').then(({ deleteImageLocal }) => {
@@ -164,10 +223,14 @@ export default function App() {
     const updated = memories.filter(m => m.id !== id);
     setMemories(updated);
     localStorage.setItem('sea_milestones', JSON.stringify(updated));
+
+    if (isSupabaseConnected()) {
+      await deleteSingleMilestone(id, memoryToDelete?.image);
+    }
   };
 
   // Add Letter/Bottle wish handler
-  const handleAddLetter = (newLetter: Omit<LoveLetter, 'id' | 'timestamp'>) => {
+  const handleAddLetter = async (newLetter: Omit<LoveLetter, 'id' | 'timestamp'>) => {
     const freshLetter: LoveLetter = {
       ...newLetter,
       id: Math.random().toString(36).substring(2, 9),
@@ -176,13 +239,21 @@ export default function App() {
     const updated = [...letters, freshLetter];
     setLetters(updated);
     localStorage.setItem('sea_wishes', JSON.stringify(updated));
+
+    if (isSupabaseConnected()) {
+      await pushSingleWish(freshLetter);
+    }
   };
 
   // Delete Letter handler
-  const handleDeleteLetter = (id: string) => {
+  const handleDeleteLetter = async (id: string) => {
     const updated = letters.filter(l => l.id !== id);
     setLetters(updated);
     localStorage.setItem('sea_wishes', JSON.stringify(updated));
+
+    if (isSupabaseConnected()) {
+      await deleteSingleWish(id);
+    }
   };
 
   return (
@@ -230,6 +301,21 @@ export default function App() {
             <p className="text-[#BFDBF7]/70 text-xs sm:text-sm tracking-widest uppercase font-mono">
               Celebrating {config.partner1} & {config.partner2}'s beautiful memories & wishes
             </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsSyncModalOpen(true)}
+              className={`inline-flex items-center gap-2 px-4 py-2.5 rounded-2xl text-xs font-bold font-mono tracking-wider uppercase border transition-all duration-300 active:scale-95 cursor-pointer shadow-md backdrop-blur-md ${
+                isSupabaseActive 
+                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/20' 
+                  : 'bg-white/5 border-white/10 text-sky-300 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <Database className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              <span>{isSupabaseActive ? 'Live Synced' : 'Enable Sync'}</span>
+              <div className={`w-2 h-2 rounded-full ml-1 ${isSupabaseActive ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+            </button>
           </div>
         </header>
 
@@ -286,6 +372,186 @@ export default function App() {
           <span>© 2026 {config.partner1.toUpperCase()} & {config.partner2.toUpperCase()} • ANNIVERSARY EDITION</span>
         </footer>
       </div>
+
+      {/* Cloud Sync Setup Modal */}
+      {isSyncModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="bg-[#0b1b2b] border border-white/10 rounded-[32px] p-6 max-w-2xl w-full max-h-[85vh] overflow-y-auto text-white shadow-2xl relative"
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-start mb-6">
+              <div className="flex items-center gap-2.5">
+                <div className="bg-sky-500/10 p-2.5 rounded-xl text-sky-400 border border-sky-500/20">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold tracking-wide font-serif">Cloud Sync Configuration</h3>
+                  <p className="text-[10px] text-sky-300/60 font-mono uppercase">Sync wishes & memories in real-time</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsSyncModalOpen(false)}
+                className="text-white/40 hover:text-white transition-colors text-xl font-mono p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="space-y-6">
+              <p className="text-xs text-[#BFDBF7]/70 leading-relaxed">
+                Connect your scrapbook to a free **Supabase** database to automatically keep wishes, memories, and photos synchronized in real-time between your devices (e.g. your phone and your partner's phone).
+              </p>
+
+              {/* Form Inputs */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-mono uppercase tracking-widest text-[#BFDBF7]/50 mb-1.5 font-bold">
+                    Supabase Project URL
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="https://your-project-id.supabase.co"
+                    defaultValue={localStorage.getItem('supabase_sync_url') || ''}
+                    id="supabase-url-input"
+                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 font-mono"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-mono uppercase tracking-widest text-[#BFDBF7]/50 mb-1.5 font-bold">
+                    Supabase Anon Public API Key
+                  </label>
+                  <textarea
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    defaultValue={localStorage.getItem('supabase_sync_key') || ''}
+                    id="supabase-key-input"
+                    rows={3}
+                    className="w-full bg-slate-900/50 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-400 font-mono resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  onClick={async () => {
+                    const urlVal = (document.getElementById('supabase-url-input') as HTMLInputElement)?.value.trim();
+                    const keyVal = (document.getElementById('supabase-key-input') as HTMLTextAreaElement)?.value.trim();
+                    if (!urlVal || !keyVal) {
+                      alert("Please provide both the Supabase URL and Anon Key!");
+                      return;
+                    }
+                    const success = initSupabase(urlVal, keyVal);
+                    if (success) {
+                      setIsSupabaseActive(true);
+                      alert("Successfully connected to Supabase! Syncing data now...");
+                      setSyncing(true);
+                      try {
+                        const syncedWishes = await syncWishes(letters);
+                        setLetters(syncedWishes);
+                        localStorage.setItem('sea_wishes', JSON.stringify(syncedWishes));
+
+                        const syncedMems = await syncMilestones(memories);
+                        syncedMems.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        setMemories(syncedMems);
+                        localStorage.setItem('sea_milestones', JSON.stringify(syncedMems));
+                        
+                        alert("Sync complete! You are now live.");
+                      } catch (err: any) {
+                        alert("Connected, but initial sync encountered an error: " + (err.message || err));
+                      } finally {
+                        setSyncing(false);
+                        setIsSyncModalOpen(false);
+                      }
+                    } else {
+                      alert("Failed to initialize Supabase client. Please check your inputs.");
+                    }
+                  }}
+                  className="flex-1 bg-sky-400 hover:bg-white text-slate-900 hover:text-sky-500 py-3 rounded-xl text-xs font-bold font-mono tracking-wider uppercase transition-all duration-300 text-center active:scale-95 cursor-pointer"
+                >
+                  {syncing ? 'Connecting & Syncing...' : 'Connect & Sync'}
+                </button>
+
+                {isSupabaseActive && (
+                  <button
+                    onClick={() => {
+                      disconnectSupabase();
+                      setIsSupabaseActive(false);
+                      alert("Disconnected. Your data will now remain local on this device.");
+                      setIsSyncModalOpen(false);
+                    }}
+                    className="bg-rose-500/15 border border-rose-500/30 hover:bg-rose-500/25 text-rose-300 py-3 px-6 rounded-xl text-xs font-bold font-mono tracking-wider uppercase transition-all duration-300 text-center active:scale-95 cursor-pointer"
+                  >
+                    Disconnect
+                  </button>
+                )}
+              </div>
+
+              {/* Shareable Link Helper */}
+              {isSupabaseActive && (
+                <div className="p-4 bg-slate-900/40 rounded-2xl border border-white/5 space-y-2.5">
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold">
+                    <Info className="w-3.5 h-3.5" /> Easy Partner Connection Link
+                  </div>
+                  <p className="text-[10px] text-[#BFDBF7]/60 leading-relaxed text-left">
+                    Send this link to your partner. When they open it, their scrapbook will automatically configure itself to use your database!
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={`${window.location.origin}${window.location.pathname}?supabaseUrl=${encodeURIComponent(localStorage.getItem('supabase_sync_url') || '')}&supabaseKey=${encodeURIComponent(localStorage.getItem('supabase_sync_key') || '')}`}
+                      id="shareable-link-input"
+                      className="flex-1 bg-slate-950/60 border border-white/5 rounded-lg px-3 py-1.5 text-[10px] font-mono text-slate-400 select-all focus:outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const linkEl = document.getElementById('shareable-link-input') as HTMLInputElement;
+                        if (linkEl) {
+                          linkEl.select();
+                          navigator.clipboard.writeText(linkEl.value);
+                          alert("Link copied to clipboard! Send this link to Enjie.");
+                        }
+                      }}
+                      className="bg-white/5 hover:bg-white/10 text-white border border-white/10 px-3 py-1.5 rounded-lg text-[10px] font-bold font-mono active:scale-95 transition-all cursor-pointer inline-flex items-center gap-1"
+                    >
+                      <Copy className="w-3 h-3" /> Copy
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Schema SQL Instruction */}
+              <div className="p-4 bg-slate-900/40 rounded-2xl border border-white/5 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-[#BFDBF7]/80 inline-flex items-center gap-1.5">
+                    <Database className="w-3.5 h-3.5 text-sky-400" /> Database Setup Script
+                  </span>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(SUPABASE_SQL_SCHEMA);
+                      alert("Database schema script copied to clipboard!");
+                    }}
+                    className="text-[10px] font-mono text-sky-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Copy SQL
+                  </button>
+                </div>
+                <p className="text-[10px] text-[#BFDBF7]/50 leading-normal text-left">
+                  Create a new project on **Supabase**, click on **SQL Editor** in the sidebar, paste the script below, and click **Run**:
+                </p>
+                <pre className="bg-slate-950/80 p-3 rounded-xl text-[9px] font-mono text-[#BFDBF7]/65 max-h-48 overflow-y-auto border border-white/5 text-left whitespace-pre-wrap select-all">
+                  {SUPABASE_SQL_SCHEMA}
+                </pre>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 }

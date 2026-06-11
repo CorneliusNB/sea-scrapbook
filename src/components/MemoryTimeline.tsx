@@ -44,6 +44,24 @@ export const PolaroidImage = ({ imageSrc, alt, className }: { imageSrc: string; 
     }
   }, [imageSrc]);
 
+  React.useEffect(() => {
+    if (!imageSrc || !imageSrc.startsWith('image-')) return;
+    
+    const handleImageUpdate = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.id === imageSrc) {
+        getImageLocal(imageSrc).then(base64 => {
+          if (base64) setSrc(base64);
+        });
+      }
+    };
+
+    window.addEventListener('local_image_updated', handleImageUpdate);
+    return () => {
+      window.removeEventListener('local_image_updated', handleImageUpdate);
+    };
+  }, [imageSrc]);
+
   if (isLoading) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-slate-50/5 text-sky-400/40">
