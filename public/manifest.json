@@ -1,0 +1,18 @@
+{
+  "short_name": "Scrapbook",
+  "name": "Our Love Scrapbook",
+  "description": "Celebrating Enjie & Cornel's beautiful memories & wishes.",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any"
+    }
+  ],
+  "start_url": ".",
+  "background_color": "#061320",
+  "theme_color": "#061320",
+  "display": "standalone",
+  "orientation": "portrait"
+}

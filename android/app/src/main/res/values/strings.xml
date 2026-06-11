@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Sea Scrapbook</string>
+    <string name="title_activity_main">Sea Scrapbook</string>
+    <string name="package_name">com.anniversary.seacove</string>
+    <string name="custom_url_scheme">com.anniversary.seacove</string>
+</resources>

@@ -1,0 +1,6 @@
+{
+  "name": "Sea Anniversary Gift",
+  "description": "A cute, sea-themed anniversary celebration app with a customizable ocean soundtrack, interactive floating bubble messages, and a shared memory timeline.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
