@@ -21,7 +21,7 @@ const DEFAULT_MEMORIES: MemoryMilestone[] = [
     id: 'default-memory-1',
     date: '2025-06-24',
     title: 'First sushi with bob',
-    description: 'Having our first sushi together! So yummy and sweet.',
+    description: '',
     icon: 'fish',
     image: 'images/sushi.jpg'
   },
@@ -29,7 +29,7 @@ const DEFAULT_MEMORIES: MemoryMilestone[] = [
     id: 'default-memory-2',
     date: '2025-09-03',
     title: 'First ramenya with bob',
-    description: 'Sharing a hot bowl of ramen at Ramenya. Loved every bite.',
+    description: '',
     icon: 'shell',
     image: 'images/ramen.jpg'
   },
@@ -37,7 +37,7 @@ const DEFAULT_MEMORIES: MemoryMilestone[] = [
     id: 'default-memory-3',
     date: '2025-10-10',
     title: 'Bob birthday yayyy',
-    description: "Celebrating my bob's birthday! Yayyy! Wishing you the absolute happiest year.",
+    description: '',
     icon: 'starfish',
     image: 'images/birthday.jpg'
   },
@@ -45,7 +45,7 @@ const DEFAULT_MEMORIES: MemoryMilestone[] = [
     id: 'default-memory-4',
     date: '2026-02-14',
     title: 'Trip to pik with bob',
-    description: "Going on a romantic Valentine's Day trip to PIK together!",
+    description: '',
     icon: 'anchor',
     image: 'images/pik.jpg'
   },
@@ -53,7 +53,7 @@ const DEFAULT_MEMORIES: MemoryMilestone[] = [
     id: 'default-memory-5',
     date: '2026-03-16',
     title: 'Trip to dufan with bob',
-    description: 'An exciting day of fun rides and laughter at Dufan with my bob.',
+    description: '',
     icon: 'turtle',
     image: 'images/dufan.jpeg'
   },
@@ -61,7 +61,7 @@ const DEFAULT_MEMORIES: MemoryMilestone[] = [
     id: 'default-memory-6',
     date: '2026-04-24',
     title: 'First cosplay beruang with bob',
-    description: 'Dressing up in cute bear outfits! Too funny and adorable.',
+    description: '',
     icon: 'jellyfish',
     image: 'images/bear.jpg'
   }
@@ -100,9 +100,11 @@ export default function App() {
       }
       
       DEFAULT_MEMORIES.forEach(defMem => {
-        const hasMem = parsedMemories.some(m => m.id === defMem.id);
-        if (!hasMem) {
+        const existingIdx = parsedMemories.findIndex(m => m.id === defMem.id);
+        if (existingIdx === -1) {
           parsedMemories.push(defMem);
+        } else {
+          parsedMemories[existingIdx].description = defMem.description;
         }
       });
       
