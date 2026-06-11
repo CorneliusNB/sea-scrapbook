@@ -9,7 +9,7 @@ import { Music, Play, Pause, Volume2, Sparkles, Radio } from 'lucide-react';
 const ACTIVE_TRACK = {
   title: "Somethin' Stupid",
   artist: "Frank Sinatra",
-  url: "song.flac",
+  url: "song.m4a",
   lyrics: [
     { time: 0, text: "🎵 Our Ocean Symphony begins..." },
     { time: 9, text: "⛵ Sailing together into the deep blue..." },
